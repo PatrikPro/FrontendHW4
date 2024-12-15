@@ -1,207 +1,189 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // Import navigace
-import MemberManagement from './MemberManagement';
-import './ShoppingListDetail.css';
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import MemberManagement from "./MemberManagement";
+import "./ShoppingListDetail.css";
 
-const SHOPPING_LIST_DATA = {
-  listId: '123',
-  name: 'For Party',
-  owner: { id: 'user1', name: 'Owner User' },
-  members: [
-    { id: 'user1', name: 'Owner User' },
-    { id: 'user2', name: 'Member User' }
-  ],
-  items: [
-    { id: 'item1', name: 'Doritos', isResolved: false },
-    { id: 'item2', name: 'Nuts', isResolved: false },
-    { id: 'item3', name: 'Haribo', isResolved: false },
-    { id: 'item4', name: 'Coca Cola', isResolved: true },
-    { id: 'item5', name: 'Pepsi', isResolved: false },
-    { id: 'item6', name: 'Milk', isResolved: true },
-    { id: 'item7', name: 'Juice', isResolved: false },
-    { id: 'item8', name: 'Apple', isResolved: false }
-  ]
-};
-
-const currentUser = { id: 'user1', name: 'Owner User' }; // Přepněte na 'user2' pro testování člena
+const currentUser = { id: "user1", name: "Owner User" };
 
 function ShoppingListDetail() {
-  const navigate = useNavigate(); // Inicializace navigace
-  const [listData, setListData] = useState(SHOPPING_LIST_DATA);
+  const { id } = useParams(); // Fetch list ID from URL
+  const navigate = useNavigate();
+  const [listData, setListData] = useState(null); // Shopping list data
+  const [isLoading, setIsLoading] = useState(true); // Loading state
+  const [error, setError] = useState(null); // Error state
   const [isEditingName, setIsEditingName] = useState(false);
-  const [newItem, setNewItem] = useState('');
-  const [filter, setFilter] = useState('all'); // 'all', 'unresolved', 'resolved'
+  const [newItem, setNewItem] = useState("");
+  const [filter, setFilter] = useState("all"); // Filter state
 
-  const isOwner = listData.owner.id === currentUser.id;
+  // Fetch shopping list data from backend
+  useEffect(() => {
+    const fetchListData = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(`http://localhost:5000/shopping-lists/${id}`);
+        if (!response.ok) throw new Error("Failed to fetch shopping list data");
+        const data = await response.json();
+        setListData(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
+    fetchListData();
+  }, [id]);
+
+  const isOwner = listData?.owner?.id === currentUser.id;
+
+  // Toggle item resolved state
   const toggleItemResolved = (itemId) => {
-    setListData((prevState) => ({
-      ...prevState,
-      items: prevState.items.map((item) =>
+    setListData((prev) => ({
+      ...prev,
+      items: prev.items.map((item) =>
         item.id === itemId ? { ...item, isResolved: !item.isResolved } : item
-      )
+      ),
     }));
   };
 
-  const addItem = (itemName) => {
-    if (!itemName.trim()) return;
-    const newItem = {
-      id: `item${listData.items.length + 1}`,
-      name: itemName,
-      isResolved: false
-    };
-    setListData((prevState) => ({
-      ...prevState,
-      items: [...prevState.items, newItem]
+  // Add new item
+  const addItem = () => {
+    if (!newItem.trim()) return;
+    const newItemObj = { id: Date.now().toString(), name: newItem, isResolved: false };
+    setListData((prev) => ({
+      ...prev,
+      items: [...prev.items, newItemObj],
     }));
-    setNewItem('');
+    setNewItem("");
   };
 
-  const removeItem = (itemId) => {
-    setListData((prevState) => ({
-      ...prevState,
-      items: prevState.items.filter((item) => item.id !== itemId)
-    }));
-  };
-
-  const addMember = (email) => {
-    const newMember = {
-      id: `user${listData.members.length + 1}`,
-      name: email.split('@')[0]
-    };
-    setListData((prevState) => ({
-      ...prevState,
-      members: [...prevState.members, newMember]
-    }));
-  };
-
-  const removeMember = (memberId) => {
-    setListData((prevState) => ({
-      ...prevState,
-      members: prevState.members.filter((member) => member.id !== memberId)
-    }));
-  };
-
+  // Edit list name
   const editListName = (newName) => {
     if (isOwner) {
-      setListData((prevState) => ({
-        ...prevState,
-        name: newName
-      }));
+      setListData((prev) => ({ ...prev, name: newName }));
       setIsEditingName(false);
     }
   };
 
-  const filteredItems = listData.items.filter((item) => {
-    if (filter === 'unresolved') return !item.isResolved;
-    if (filter === 'resolved') return item.isResolved;
-    return true; // Default: 'all'
+  // Add member
+  const addMember = (email) => {
+    const newMember = { id: Date.now().toString(), name: email.split("@")[0] };
+    setListData((prev) => ({ ...prev, members: [...prev.members, newMember] }));
+  };
+
+  // Remove member
+  const removeMember = (memberId) => {
+    setListData((prev) => ({
+      ...prev,
+      members: prev.members.filter((m) => m.id !== memberId),
+    }));
+  };
+
+  // Filter items
+  const filteredItems = listData?.items.filter((item) => {
+    if (filter === "unresolved") return !item.isResolved;
+    if (filter === "resolved") return item.isResolved;
+    return true;
   });
 
-  const sortedItems = filteredItems.slice().sort((a, b) => {
-    if (a.isResolved === b.isResolved) {
-      return a.name.localeCompare(b.name);
-    }
-    return a.isResolved ? 1 : -1; // Nevyřešené položky první
-  });
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
     <div className="shopping-list-container">
+      {/* Header */}
       <header className="header">
-        {/* Zpětná navigace */}
-        <span className="back-button" onClick={() => navigate('/')}>
+        <span className="back-button" onClick={() => navigate("/")}>
           ←
         </span>
         {isEditingName ? (
           <input
             type="text"
-            className="edit-list-name-input"
             value={listData.name}
             onChange={(e) => editListName(e.target.value)}
             onBlur={() => setIsEditingName(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') setIsEditingName(false);
-            }}
+            onKeyDown={(e) => e.key === "Enter" && setIsEditingName(false)}
             autoFocus
+            className="edit-list-name-input"
           />
         ) : (
-          <div className="list-name-container">
-            <h1>{listData.name}</h1>
-            {isOwner && (
-              <span
-                className="edit-icon"
-                onClick={() => setIsEditingName(true)}
-                title="Edit List Name"
-              >
-                ✏️
-              </span>
-            )}
-          </div>
+          <h1 onClick={() => isOwner && setIsEditingName(true)}>
+            {listData.name} {isOwner && "✏️"}
+          </h1>
         )}
       </header>
 
-      {/* Filtrování položek */}
+      {/* Filters */}
       <div className="filter-container">
         <button
-          className={`filter-button ${filter === 'all' ? 'active' : ''}`}
-          onClick={() => setFilter('all')}
+          className={`filter-button ${filter === "all" ? "active" : ""}`}
+          onClick={() => setFilter("all")}
         >
           All
         </button>
         <button
-          className={`filter-button ${filter === 'unresolved' ? 'active' : ''}`}
-          onClick={() => setFilter('unresolved')}
+          className={`filter-button ${filter === "unresolved" ? "active" : ""}`}
+          onClick={() => setFilter("unresolved")}
         >
           Unresolved
         </button>
         <button
-          className={`filter-button ${filter === 'resolved' ? 'active' : ''}`}
-          onClick={() => setFilter('resolved')}
+          className={`filter-button ${filter === "resolved" ? "active" : ""}`}
+          onClick={() => setFilter("resolved")}
         >
           Resolved
         </button>
       </div>
 
-      {/* Položky seznamu */}
+      {/* Items */}
       <div className="items-container">
-        {sortedItems.map((item) => (
-          <div key={item.id} className={`item-row ${item.isResolved ? 'resolved' : ''}`}>
+        {filteredItems.map((item) => (
+          <div key={item.id} className={`item-row ${item.isResolved ? "resolved" : ""}`}>
             <label>
               <input
                 type="checkbox"
                 checked={item.isResolved}
                 onChange={() => toggleItemResolved(item.id)}
               />
-              <span>{item.name}</span>
+              {item.name}
             </label>
-            <button className="item-action-button" onClick={() => removeItem(item.id)}>
-              -
+            <button
+              className="delete-item-button"
+              onClick={() =>
+                setListData((prev) => ({
+                  ...prev,
+                  items: prev.items.filter((i) => i.id !== item.id),
+                }))
+              }
+            >
+              ❌
             </button>
           </div>
         ))}
-
-        {/* Přidání nové položky */}
-        <div className="item-row add-item-row">
-          <input
-            type="text"
-            placeholder="Enter item name"
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            className="add-item-input"
-          />
-          <button className="add-item-button" onClick={() => addItem(newItem)}>
-            Add
-          </button>
-        </div>
       </div>
 
-      {/* Správa členů */}
-      <MemberManagement
-        members={listData.members}
-        onAddMember={isOwner ? addMember : null}
-        onRemoveMember={isOwner || currentUser ? removeMember : null}
-        userId={currentUser.id}
-      />
+      {/* Add Item */}
+      <div className="add-item-container">
+        <input
+          type="text"
+          placeholder="Enter item name"
+          value={newItem}
+          onChange={(e) => setNewItem(e.target.value)}
+        />
+        <button onClick={addItem} className="add-button">
+          Add
+        </button>
+      </div>
+
+      {/* Member Management */}
+      <div className="member-management">
+        <MemberManagement
+          members={listData.members}
+          onAddMember={isOwner ? addMember : null}
+          onRemoveMember={isOwner ? removeMember : null}
+          userId={currentUser.id}
+        />
+      </div>
     </div>
   );
 }
